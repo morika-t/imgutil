@@ -17,7 +17,8 @@ type Image interface {
 	SetWorkingDir(string) error
 	SetCmd(...string) error
 	Rebase(string, Image) error
-	AddLayer(path string) error
+	AddLayerFromFile(path string) error
+	AddLayerFromReader(io.Reader) error
 	ReuseLayer(sha string) error
 	TopLayer() (string, error)
 	Save() (string, error)

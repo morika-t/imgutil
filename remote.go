@@ -238,8 +238,20 @@ func (r *remoteImage) GetLayer(string) (io.ReadCloser, error) {
 	panic("not implemented")
 }
 
-func (r *remoteImage) AddLayer(path string) error {
+func (r *remoteImage) AddLayerFromFile(path string) error {
 	layer, err := tarball.LayerFromFile(path)
+	if err != nil {
+		return err
+	}
+	r.image, err = mutate.AppendLayers(r.image, layer)
+	if err != nil {
+		return errors.Wrap(err, "add layer")
+	}
+	return nil
+}
+
+func (r *remoteImage) AddLayerFromReader(layerReader io.Reader) error {
+	layer, err := tarball.LayerFromReader(layerReader)
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,8 +19,14 @@ import (
 )
 
 func NewImage(name, topLayerSha, digest string) *Image {
+	layerDir, err := ioutil.TempDir("", "fake-image")
+	if err != nil {
+		panic(err)
+	}
+
 	return &Image{
 		alreadySaved:  false,
+		layerDir:      layerDir,
 		labels:        map[string]string{},
 		env:           map[string]string{},
 		topLayerSha:   topLayerSha,
@@ -110,10 +117,32 @@ func (f *Image) TopLayer() (string, error) {
 	return f.topLayerSha, nil
 }
 
-func (f *Image) AddLayer(path string) error {
+func (f *Image) AddLayerFromFile(path string) error {
 	sha, err := shaForFile(path)
 	if err != nil {
 		return err
+	}
+
+	f.layersMap["sha256:"+sha] = path
+	f.layers = append(f.layers, path)
+	return nil
+}
+
+func (f *Image) AddLayerFromReader(r io.Reader) error {
+	sha, err := shaForReader(r)
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(f.layerDir, randString(10) + ".tar")
+	dst, err := os.Create(path)
+	if err != nil {
+		return errors.Wrap(err, "creating new layer during copy")
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, r); err != nil {
+		return errors.Wrap(err, "copying layers")
 	}
 
 	f.layersMap["sha256:"+sha] = path
@@ -127,8 +156,12 @@ func shaForFile(path string) (string, error) {
 		return "", errors.Wrapf(err, "failed to open file")
 	}
 
+	return shaForReader(file)
+}
+
+func shaForReader(r io.Reader) (string, error) {
 	hasher := sha256.New()
-	if _, err := io.Copy(hasher, file); err != nil {
+	if _, err := io.Copy(hasher, r); err != nil {
 		return "", errors.Wrapf(err, "failed to copy file to hasher")
 	}
 
@@ -156,12 +189,6 @@ func (f *Image) ReuseLayer(sha string) error {
 
 func (f *Image) Save() (string, error) {
 	f.alreadySaved = true
-
-	var err error
-	f.layerDir, err = ioutil.TempDir("", "fake-image")
-	if err != nil {
-		return "", errors.Wrap(err, "failed to create tmpDir")
-	}
 
 	for sha, path := range f.layersMap {
 		newPath := filepath.Join(f.layerDir, filepath.Base(path))
@@ -299,4 +326,12 @@ func (f *Image) IsSaved() bool {
 
 func (f *Image) Base() string {
 	return f.base
+}
+
+func randString(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = 'a' + byte(rand.Intn(26))
+	}
+	return string(b)
 }

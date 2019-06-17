@@ -181,7 +181,7 @@ func (l *localImage) Rebase(baseTopLayer string, newBase Image) error {
 
 	// ADD EXISTING LAYERS
 	for _, filename := range manifest[0].Layers[(len(manifest[0].Layers) - keepLayers):] {
-		if err := l.AddLayer(filepath.Join(l.prevDir, filename)); err != nil {
+		if err := l.AddLayerFromFile(filepath.Join(l.prevDir, filename)); err != nil {
 			return err
 		}
 	}
@@ -247,15 +247,15 @@ func (l *localImage) GetLayer(sha string) (io.ReadCloser, error) {
 	return os.Open(filepath.Join(l.prevDir, layerID))
 }
 
-func (l *localImage) AddLayer(path string) error {
+func (l *localImage) AddLayerFromFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
-		return errors.Wrapf(err, "AddLayer: open layer: %s", path)
+		return errors.Wrapf(err, "AddLayerFromFile: open layer: %s", path)
 	}
 	defer f.Close()
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, f); err != nil {
-		return errors.Wrapf(err, "AddLayer: calculate checksum: %s", path)
+		return errors.Wrapf(err, "AddLayerFromFile: calculate checksum: %s", path)
 	}
 	sha := hex.EncodeToString(hasher.Sum(make([]byte, 0, hasher.Size())))
 
@@ -264,6 +264,10 @@ func (l *localImage) AddLayer(path string) error {
 	l.easyAddLayers = nil
 
 	return nil
+}
+
+func (l *localImage) AddLayerFromReader(rc io.Reader) error {
+	panic("implement me")
 }
 
 func (l *localImage) ReuseLayer(sha string) error {
@@ -283,7 +287,7 @@ func (l *localImage) ReuseLayer(sha string) error {
 		return fmt.Errorf("SHA %s was not found in %s", sha, l.repoName)
 	}
 
-	return l.AddLayer(filepath.Join(l.prevDir, reuseLayer))
+	return l.AddLayerFromFile(filepath.Join(l.prevDir, reuseLayer))
 }
 
 func (l *localImage) Save() (string, error) {
